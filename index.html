@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID 40-bit + NFC Scan</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; background: #eceff1; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 480px; margin: auto; }
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9em; color: #555; }
+        .row { display: flex; gap: 10px; align-items: flex-end; }
+        .row div { flex: 1; }
+        input { width: 100%; padding: 12px; margin-top: 5px; border: 2px solid #ddd; border-radius: 8px; font-size: 1.1em; box-sizing: border-box; font-family: monospace; }
+        input[readonly] { background-color: #f8f9fa; border-color: #eee; color: #666; }
+        
+        .btn-nfc { 
+            width: 100%; padding: 15px; margin-top: 20px; 
+            background-color: #2196F3; color: white; border: none; 
+            border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer;
+        }
+        .btn-nfc:active { background-color: #1976D2; }
+        #status { font-size: 0.85em; text-align: center; margin-top: 12px; color: #d35400; font-weight: bold; min-height: 1.5em; }
+        .btn-reset { width: 100%; padding: 10px; margin-top: 15px; background: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 style="text-align:center; margin-top:0; color: #2c3e50;">Przelicznik ID (40-bit)</h2>
+
+    <button id="scanButton" class="btn-nfc">📡 AKTYWUJ SKANOWANIE</button>
+    <div id="status">Wymagane HTTPS do działania NFC</div>
+
+    <label>Seryjny (HEX)</label>
+    <input type="text" id="serial" placeholder="np. 4B:27:91:16:00" oninput="handleSerial(this.value)">
+
+    <label>Format TH (Oryginał | Alternatywa Bitowa)</label>
+    <div class="row">
+        <div><input type="text" id="th" placeholder="TH HEX..." oninput="handleTH(this.value)"></div>
+        <div><input type="text" id="th_alt" readonly></div>
+    </div>
+
+    <label>Format Green (FC-ID)</label>
+    <input type="text" id="green" placeholder="np. 00358-300069" oninput="handleGreen(this.value)">
+
+    <button class="btn-reset" onclick="resetForm()">WYCZYŚĆ</button>
+</div>
+
+<script>
+    const scanButton = document.getElementById('scanButton');
+    const status = document.getElementById('status');
+
+    // Główna funkcja skanująca
+    scanButton.addEventListener('click', async () => {
+        if (!('NDEFReader' in window)) {
+            status.innerText = "❌ Twoja przeglądarka/telefon nie obsługuje Web NFC.";
+            return;
+        }
+
+        try {
+            // 1. Próba aktywacji czytnika (to wywoła prośbę o uprawnienia w Chrome)
+            const ndef = new NDEFReader();
+            await ndef.scan();
+            
+            status.style.color = "#27ae60";
+            status.innerText = "✅ Skanowanie aktywne! Zbliż kartę do pleców telefonu.";
+
+            ndef.onreadingerror = () => {
+                status.innerText = "⚠️ Błąd odczytu. Spróbuj zbliżyć kartę ponownie.";
+            };
+
+            ndef.onreading = ({ serialNumber }) => {
+                status.innerText = "✅ Odczytano UID: " + serialNumber;
+                handleSerial(serialNumber);
+            };
+
+        } catch (error) {
+            if (error.name === "NotAllowedError") {
+                status.innerText = "🚫 Brak uprawnień. Kliknij ikonę kłódki przy pasku adresu i włącz NFC.";
+            } else if (error.name === "SecurityError") {
+                status.innerText = "🔒 BŁĄD: NFC wymaga bezpiecznego połączenia (HTTPS).";
+            } else {
+                status.innerText = "❌ Błąd: " + error.message;
+            }
+            console.error(error);
+        }
+    });
+
+    // --- LOGIKA PRZELICZANIA ---
+    function bitCount(n) {
+        return BigInt(n).toString(2).split('1').length - 1;
+    }
+
+    function getAltHex(hex) {
+        if (!hex) return "";
+        try {
+            let val = BigInt("0x" + hex);
+            return (val ^ 1n).toString(16).toUpperCase().padStart(10, '0');
+        } catch(e) { return ""; }
+    }
+
+    function updateAll(mainThHex, fc, cid, source) {
+        mainThHex = mainThHex.toUpperCase().padStart(10, '0');
+        if (source !== 'th') document.getElementById('th').value = mainThHex;
+        document.getElementById('th_alt').value = getAltHex(mainThHex);
+        if (source !== 'green') document.getElementById('green').value = `${String(fc).padStart(5, '0')}-${String(cid).padStart(6, '0')}`;
+        
+        if (source !== 'serial') {
+            let bytes = [];
+            for (let i = 0; i < 10; i += 2) { bytes.push(mainThHex.substr(i, 2)); }
+            document.getElementById('serial').value = bytes.reverse().join(':').toUpperCase();
+        }
+    }
+
+    function handleGreen(val) {
+        let parts = val.split('-');
+        if (parts.length === 2 && parts[0] !== "" && parts[1] !== "") {
+            let fc = BigInt(parts[0]);
+            let id_ = BigInt(parts[1]);
+            let val_39 = (fc << 19n) | id_;
+            let ones = bitCount(val_39);
+            let pb_even = (ones % 2 === 0) ? 0n : 1n;
+            let th_even = ((val_39 << 1n) | pb_even).toString(16).toUpperCase().padStart(10, '0');
+            updateAll(th_even, fc, id_, 'green');
+            document.getElementById('green').value = val;
+        }
+    }
+
+    function handleTH(val) {
+        let clean = val.replace(/[^0-9A-Fa-f]/g, '');
+        if (clean.length > 0) {
+            let thVal = BigInt("0x" + clean);
+            let fc = thVal >> 20n;
+            let id_ = (thVal >> 1n) & 0x7FFFFn;
+            updateAll(clean, fc, id_, 'th');
+        }
+    }
+
+    function handleSerial(val) {
+        let clean = val.replace(/[^0-9A-Fa-f]/g, '');
+        if (clean.length >= 8) {
+            let bytes = [];
+            if (clean.length % 2 !== 0) clean = '0' + clean;
+            for (let i = 0; i < clean.length; i += 2) { bytes.push(clean.substr(i, 2)); }
+            let thHex = bytes.reverse().join('').padStart(10, '0');
+            let thVal = BigInt("0x" + thHex);
+            let fc = thVal >> 20n;
+            let id_ = (thVal >> 1n) & 0x7FFFFn;
+            updateAll(thHex, fc, id_, 'serial');
+            document.getElementById('serial').value = val.toUpperCase();
+        }
+    }
+
+    function resetForm() {
+        document.querySelectorAll('input').forEach(i => i.value = '');
+        status.innerText = "Gotowy do skanowania";
+        status.style.color = "#d35400";
+    }
+</script>
+
+</body>
+</html>
