@@ -17,7 +17,7 @@
         
         .btn-nfc { width: 100%; padding: 15px; margin-top: 20px; background-color: #2196F3; color: white; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
         .btn-nfc.active { background-color: #f44336; }
-        .btn-reset { width: 100%; padding: 12px; margin-top: 15px; background-color: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-reset { width: 100%; padding: 12px; margin-top: 15px; background-color: #7f8c8d; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .btn-xlsx { width: 100%; padding: 12px; margin-top: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: none; }
         
         #status { font-size: 0.85em; text-align: center; margin-top: 12px; color: #d35400; font-weight: bold; min-height: 1.5em; }
@@ -25,7 +25,6 @@
         .table-res { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.75em; }
         .table-res th, .table-res td { border: 1px solid #ddd; padding: 6px; text-align: left; }
         .table-res th { background: #f2f2f2; }
-        .duplicate { color: #e67e22; font-style: italic; }
     </style>
 </head>
 <body>
@@ -61,18 +60,22 @@
     </table>
 
     <button id="downloadBtn" class="btn-xlsx">POBIERZ .XLSX</button>
-    <button class="btn-reset" onclick="resetForm()">WYCZYŚĆ WSZYSTKO</button>
+    <button class="btn-reset" onclick="clearList()">WYCZYŚĆ TYLKO LISTĘ</button>
 </div>
 
 <script>
     let scannedData = [];
     let isScanning = false;
+    let nfcAbortController = null;
 
     const scanButton = document.getElementById('scanButton');
     const status = document.getElementById('status');
 
     scanButton.addEventListener('click', async () => {
-        if (isScanning) { location.reload(); return; }
+        if (isScanning) { 
+            stopNfcScan();
+            return; 
+        }
 
         if (!('NDEFReader' in window)) {
             status.innerText = "BŁĄD: Brak obsługi NFC.";
@@ -80,19 +83,20 @@
         }
 
         try {
+            nfcAbortController = new AbortController();
             const ndef = new NDEFReader();
-            await ndef.scan();
+            
+            // Przekazujemy sygnał stopu do skanera
+            await ndef.scan({ signal: nfcAbortController.signal });
+            
             isScanning = true;
-            scanButton.innerText = "🛑 STOP / ODŚWIEŻ";
+            scanButton.innerText = "🛑 ZATRZYMAJ SKANOWANIE";
             scanButton.classList.add('active');
             status.innerText = "Skanowanie aktywne... Zbliżaj karty.";
 
             ndef.onreading = ({ serialNumber }) => {
                 handleSerial(serialNumber);
-                
                 const currentTh = document.getElementById('th').value;
-                
-                // SPRAWDZENIE DUPLIKATU
                 const isDuplicate = scannedData.some(card => card.TH === currentTh);
                 
                 if (!isDuplicate) {
@@ -101,25 +105,36 @@
                     if (navigator.vibrate) navigator.vibrate(100);
                 } else {
                     status.innerText = "Karta już jest na liście!";
-                    if (navigator.vibrate) navigator.vibrate([50, 50, 50]); // Inna wibracja dla duplikatu
+                    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
                 }
             };
         } catch (error) {
-            status.innerText = "Błąd: " + error.message;
+            if (error.name !== "AbortError") {
+                status.innerText = "Błąd: " + error.message;
+                stopNfcScan();
+            }
         }
     });
+
+    function stopNfcScan() {
+        if (nfcAbortController) {
+            nfcAbortController.abort(); // To zatrzymuje NFC bez przeładowania strony
+            nfcAbortController = null;
+        }
+        isScanning = false;
+        scanButton.innerText = "📡 START SKANOWANIA";
+        scanButton.classList.remove('active');
+        status.innerText = "Skanowanie zatrzymane. Lista zachowana.";
+    }
 
     function bitCount(n) { return BigInt(n).toString(2).split('1').length - 1; }
 
     function updateAll(mainThHex, fc, cid, source) {
         mainThHex = mainThHex.toUpperCase().padStart(10, '0');
         if (source !== 'th') document.getElementById('th').value = mainThHex;
-        
         let val = BigInt("0x" + mainThHex);
         document.getElementById('th_alt').value = (val ^ 1n).toString(16).toUpperCase().padStart(10, '0');
-        
         if (source !== 'green') document.getElementById('green').value = `${String(fc).padStart(5, '0')}-${String(cid).padStart(6, '0')}`;
-        
         if (source !== 'serial') {
             let bytes = [];
             for (let i = 0; i < 10; i += 2) { bytes.push(mainThHex.substr(i, 2)); }
@@ -197,7 +212,14 @@
         XLSX.writeFile(wb, "skan_rfid_lista.xlsx");
     });
 
-    function resetForm() { location.reload(); }
+    function clearList() {
+        if(confirm("Czy na pewno wyczyścić całą listę kart?")) {
+            scannedData = [];
+            document.getElementById('tableBody').innerHTML = "";
+            document.getElementById('downloadBtn').style.display = 'none';
+            status.innerText = "Lista wyczyszczona.";
+        }
+    }
 </script>
 
 </body>
