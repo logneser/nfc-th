@@ -7,7 +7,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; background: #eceff1; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 480px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 500px; margin: auto; }
         label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9em; color: #555; }
         .row { display: flex; gap: 10px; align-items: flex-end; }
         .row div { flex: 1; }
@@ -22,9 +22,8 @@
         
         #status { font-size: 0.85em; text-align: center; margin-top: 12px; color: #d35400; font-weight: bold; min-height: 1.5em; }
         
-        /* Styl tabeli */
-        .table-res { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.8em; }
-        .table-res th, .table-res td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .table-res { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.75em; }
+        .table-res th, .table-res td { border: 1px solid #ddd; padding: 6px; text-align: left; }
         .table-res th { background: #f2f2f2; }
     </style>
 </head>
@@ -51,8 +50,9 @@
     <table class="table-res" id="cardTable">
         <thead>
             <tr>
-                <th>TH (Oryg)</th>
-                <th>TH (Alt)</th>
+                <th>Lp</th>
+                <th>Seryjny</th>
+                <th>TH</th>
                 <th>Green</th>
             </tr>
         </thead>
@@ -60,19 +60,18 @@
     </table>
 
     <button id="downloadBtn" class="btn-xlsx">POBIERZ .XLSX</button>
-    <button class="btn-reset" onclick="resetForm()">WYCZYŚĆ</button>
+    <button class="btn-reset" onclick="resetForm()">WYCZYŚĆ WSZYSTKO</button>
 </div>
 
 <script>
     let scannedData = [];
     let isScanning = false;
 
-    // --- LOGIKA NFC ---
     const scanButton = document.getElementById('scanButton');
     const status = document.getElementById('status');
 
     scanButton.addEventListener('click', async () => {
-        if (isScanning) { location.reload(); return; } // Prosty stop przez odświeżenie
+        if (isScanning) { location.reload(); return; }
 
         if (!('NDEFReader' in window)) {
             status.innerText = "BŁĄD: Brak obsługi NFC.";
@@ -85,12 +84,11 @@
             isScanning = true;
             scanButton.innerText = "🛑 STOP / ODŚWIEŻ";
             scanButton.classList.add('active');
-            status.innerText = "Skanowanie aktywne... Zbliż kartę.";
+            status.innerText = "Skanowanie aktywne... Zbliżaj karty.";
 
             ndef.onreading = ({ serialNumber }) => {
-                status.innerText = "Zeskanowano: " + serialNumber;
+                status.innerText = "Ostatni UID: " + serialNumber;
                 handleSerial(serialNumber);
-                // Po każdym skanie dodajemy do tabeli
                 saveToTable();
                 if (navigator.vibrate) navigator.vibrate(100);
             };
@@ -99,7 +97,6 @@
         }
     });
 
-    // --- LOGIKA PRZELICZANIA (ZGODNA Z TWOIM PYTHONEM) ---
     function bitCount(n) { return BigInt(n).toString(2).split('1').length - 1; }
 
     function updateAll(mainThHex, fc, cid, source) {
@@ -157,26 +154,39 @@
         }
     }
 
-    // --- TABELA I EXCEL ---
     function saveToTable() {
+        const serial = document.getElementById('serial').value;
         const th = document.getElementById('th').value;
         const thAlt = document.getElementById('th_alt').value;
-        const gr = document.getElementById('green').value;
-        if(!th || !gr) return;
+        const green = document.getElementById('green').value;
+        
+        if(!th || !green) return;
 
-        scannedData.push({ th, thAlt, gr });
-        const row = document.getElementById('tableBody').insertRow(0);
-        row.insertCell(0).innerText = th;
-        row.insertCell(1).innerText = thAlt;
-        row.insertCell(2).innerText = gr;
+        // Dodawanie danych do tablicy dla Excela z poprawnymi nazwami kolumn
+        scannedData.push({
+            "Lp": scannedData.length + 1,
+            "Seryjny": serial,
+            "TH": th,
+            "TH Alt": thAlt,
+            "Green": green
+        });
+
+        // Dodawanie do tabeli HTML
+        const tbody = document.getElementById('tableBody');
+        const row = tbody.insertRow(0);
+        row.insertCell(0).innerText = scannedData.length;
+        row.insertCell(1).innerText = serial;
+        row.insertCell(2).innerText = th;
+        row.insertCell(3).innerText = green;
+        
         document.getElementById('downloadBtn').style.display = 'block';
     }
 
     document.getElementById('downloadBtn').addEventListener('click', () => {
         const ws = XLSX.utils.json_to_sheet(scannedData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Karty");
-        XLSX.writeFile(wb, "skan_rfid.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Lista Kart");
+        XLSX.writeFile(wb, "skan_rfid_lista.xlsx");
     });
 
     function resetForm() { location.reload(); }
