@@ -17,7 +17,7 @@
         
         .btn-nfc { width: 100%; padding: 15px; margin-top: 20px; background-color: #2196F3; color: white; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
         .btn-nfc.active { background-color: #f44336; }
-        .btn-reset { width: 100%; padding: 12px; margin-top: 15px; background-color: #7f8c8d; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-reset { width: 100%; padding: 12px; margin-top: 15px; background-color: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .btn-xlsx { width: 100%; padding: 12px; margin-top: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: none; }
         
         #status { font-size: 0.85em; text-align: center; margin-top: 12px; color: #d35400; font-weight: bold; min-height: 1.5em; }
@@ -60,7 +60,7 @@
     </table>
 
     <button id="downloadBtn" class="btn-xlsx">POBIERZ .XLSX</button>
-    <button class="btn-reset" onclick="clearList()">WYCZYŚĆ TYLKO LISTĘ</button>
+    <button class="btn-reset" onclick="resetAll()">WYCZYŚĆ WSZYSTKO</button>
 </div>
 
 <script>
@@ -86,7 +86,6 @@
             nfcAbortController = new AbortController();
             const ndef = new NDEFReader();
             
-            // Przekazujemy sygnał stopu do skanera
             await ndef.scan({ signal: nfcAbortController.signal });
             
             isScanning = true;
@@ -118,7 +117,7 @@
 
     function stopNfcScan() {
         if (nfcAbortController) {
-            nfcAbortController.abort(); // To zatrzymuje NFC bez przeładowania strony
+            nfcAbortController.abort();
             nfcAbortController = null;
         }
         isScanning = false;
@@ -212,12 +211,9 @@
         XLSX.writeFile(wb, "skan_rfid_lista.xlsx");
     });
 
-    function clearList() {
-        if(confirm("Czy na pewno wyczyścić całą listę kart?")) {
-            scannedData = [];
-            document.getElementById('tableBody').innerHTML = "";
-            document.getElementById('downloadBtn').style.display = 'none';
-            status.innerText = "Lista wyczyszczona.";
+    function resetAll() {
+        if(confirm("Czy na pewno wyczyścić wszystko i zresetować formularz?")) {
+            location.reload();
         }
     }
 </script>
