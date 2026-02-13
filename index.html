@@ -32,13 +32,13 @@
 <div class="card">
     <h2 style="text-align:center; margin-top:0; color: #2c3e50;">Przelicznik ID (40-bit)</h2>
 
-    <button id="scanButton" class="btn-nfc">📡 START SKANOWANIA</button>
+    <button id="scanButton" class="btn-nfc">START SKANOWANIA</button>
     <div id="status">Gotowy do skanowania</div>
 
     <label>Seryjny (HEX)</label>
     <input type="text" id="serial" placeholder="np. 4B:27:91:16:00" oninput="handleSerial(this.value)">
 
-    <label>Format TH (Oryginał | Alternatywa Bitowa)</label>
+    <label>Format TH (Oryginał | Alternatywa)</label>
     <div class="row">
         <div><input type="text" id="th" placeholder="TH HEX..." oninput="handleTH(this.value)"></div>
         <div><input type="text" id="th_alt" readonly></div>
@@ -89,7 +89,7 @@
             await ndef.scan({ signal: nfcAbortController.signal });
             
             isScanning = true;
-            scanButton.innerText = "🛑 ZATRZYMAJ SKANOWANIE";
+            scanButton.innerText = "ZATRZYMAJ SKANOWANIE";
             scanButton.classList.add('active');
             status.innerText = "Skanowanie aktywne... Zbliżaj karty.";
 
