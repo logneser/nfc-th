@@ -3,83 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RFID 40-bit Batch Scanner</title>
+    <title>Multikonwerter RFID</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; padding: 15px; background: #eceff1; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 500px; margin: auto; }
-        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.85em; color: #555; }
-        
-        .row { display: flex; gap: 8px; margin-top: 5px; }
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; background: #eceff1; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 480px; margin: auto; }
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9em; color: #555; }
+        .row { display: flex; gap: 10px; align-items: flex-end; }
         .row div { flex: 1; }
-        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; font-size: 1em; box-sizing: border-box; }
-        input[readonly] { background: #f9f9f9; color: #666; }
-
-        .btn-start { width: 100%; padding: 15px; background: #2196F3; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; }
-        .btn-stop { background: #f44336 !important; }
-        .btn-download { width: 100%; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+        input { width: 100%; padding: 12px; margin-top: 5px; border: 2px solid #ddd; border-radius: 8px; font-size: 1.1em; box-sizing: border-box; font-family: monospace; }
+        input:focus { border-color: #4CAF50; outline: none; background: #f9fff9; }
+        input[readonly] { background-color: #f8f9fa; border-color: #eee; color: #666; cursor: default; }
         
-        #status { text-align: center; margin: 10px 0; font-size: 0.9em; font-weight: bold; min-height: 1.2em; }
+        .btn-nfc { width: 100%; padding: 15px; margin-top: 20px; background-color: #2196F3; color: white; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
+        .btn-nfc.active { background-color: #f44336; }
+        .btn-reset { width: 100%; padding: 12px; margin-top: 15px; background-color: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-xlsx { width: 100%; padding: 12px; margin-top: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: none; }
         
-        .table-container { margin-top: 25px; border-top: 2px solid #eee; padding-top: 15px; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f2f2f2; }
-        tr:nth-child(even) { background: #fafafa; }
+        #status { font-size: 0.85em; text-align: center; margin-top: 12px; color: #d35400; font-weight: bold; min-height: 1.5em; }
+        
+        /* Styl tabeli */
+        .table-res { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.8em; }
+        .table-res th, .table-res td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .table-res th { background: #f2f2f2; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center; margin-top:0;">Skaner Zbiorczy RFID</h2>
+    <h2 style="text-align:center; margin-top:0; color: #2c3e50;">Przelicznik ID (40-bit)</h2>
 
-    <button id="scanButton" class="btn-start">START SKANOWANIA (CIĄGŁE)</button>
-    <div id="status">Gotowy do pracy</div>
+    <button id="scanButton" class="btn-nfc">📡 START SKANOWANIA</button>
+    <div id="status">Gotowy do skanowania</div>
 
-    <div id="last-read-box">
-        <label>Ostatni odczyt (TH / TH Alt)</label>
-        <div class="row">
-            <div><input type="text" id="th" readonly></div>
-            <div><input type="text" id="th_alt" readonly></div>
-        </div>
-        <label>Ostatni odczyt (Green FC-ID)</label>
-        <input type="text" id="green" readonly>
+    <label>Seryjny (HEX)</label>
+    <input type="text" id="serial" placeholder="np. 4B:27:91:16:00" oninput="handleSerial(this.value)">
+
+    <label>Format TH (Oryginał | Alternatywa Bitowa)</label>
+    <div class="row">
+        <div><input type="text" id="th" placeholder="TH HEX..." oninput="handleTH(this.value)"></div>
+        <div><input type="text" id="th_alt" readonly></div>
     </div>
 
-    <div class="table-container">
-        <h3 style="margin-top:0; font-size: 1em;">Lista zeskanowanych kart:</h3>
-        <table id="cardTable">
-            <thead>
-                <tr>
-                    <th>Lp.</th>
-                    <th>TH (Oryg)</th>
-                    <th>TH (Alt)</th>
-                    <th>Green (FC-ID)</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody"></tbody>
-        </table>
-        <button id="downloadBtn" class="btn-download" style="display:none;">POBIERZ LISTĘ (.XLSX)</button>
-    </div>
+    <label>Format Green (FC-ID)</label>
+    <input type="text" id="green" placeholder="np. 00358-300069" oninput="handleGreen(this.value)">
+
+    <table class="table-res" id="cardTable">
+        <thead>
+            <tr>
+                <th>TH (Oryg)</th>
+                <th>TH (Alt)</th>
+                <th>Green</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <button id="downloadBtn" class="btn-xlsx">POBIERZ .XLSX</button>
+    <button class="btn-reset" onclick="resetForm()">WYCZYŚĆ</button>
 </div>
 
 <script>
-    let scannedCards = [];
+    let scannedData = [];
     let isScanning = false;
-    let ndef = null;
-    let ctrl = null;
 
+    // --- LOGIKA NFC ---
     const scanButton = document.getElementById('scanButton');
     const status = document.getElementById('status');
-    const tableBody = document.getElementById('tableBody');
-    const downloadBtn = document.getElementById('downloadBtn');
 
-    // Główna logika skanowania ciągłego
     scanButton.addEventListener('click', async () => {
-        if (isScanning) {
-            stopScanning();
-            return;
-        }
+        if (isScanning) { location.reload(); return; } // Prosty stop przez odświeżenie
 
         if (!('NDEFReader' in window)) {
             status.innerText = "BŁĄD: Brak obsługi NFC.";
@@ -87,97 +80,106 @@
         }
 
         try {
-            isScanning = true;
-            scanButton.innerText = "STOP SKANOWANIA";
-            scanButton.classList.add('btn-stop');
-            status.innerText = "📡 Skanowanie aktywne... Zbliżaj karty.";
-
-            ndef = new NDEFReader();
+            const ndef = new NDEFReader();
             await ndef.scan();
+            isScanning = true;
+            scanButton.innerText = "🛑 STOP / ODŚWIEŻ";
+            scanButton.classList.add('active');
+            status.innerText = "Skanowanie aktywne... Zbliż kartę.";
 
             ndef.onreading = ({ serialNumber }) => {
-                const results = processUID(serialNumber);
-                addCardToTable(results);
-                updateDisplay(results);
-                
-                // Sygnał dźwiękowy lub wibracja (jeśli obsługiwane)
-                if (navigator.vibrate) navigator.vibrate(100);
                 status.innerText = "Zeskanowano: " + serialNumber;
-                setTimeout(() => { 
-                    if(isScanning) status.innerText = "📡 Czekam na kolejną kartę..."; 
-                }, 1500);
+                handleSerial(serialNumber);
+                // Po każdym skanie dodajemy do tabeli
+                saveToTable();
+                if (navigator.vibrate) navigator.vibrate(100);
             };
-
         } catch (error) {
             status.innerText = "Błąd: " + error.message;
-            stopScanning();
         }
     });
 
-    function stopScanning() {
-        isScanning = false;
-        scanButton.innerText = "START SKANOWANIA (CIĄGŁE)";
-        scanButton.classList.remove('btn-stop');
-        status.innerText = "Skanowanie zatrzymane.";
-        // Uwaga: Web NFC nie ma metody .stop(), po prostu przestajemy reagować na onreading
-    }
+    // --- LOGIKA PRZELICZANIA (ZGODNA Z TWOIM PYTHONEM) ---
+    function bitCount(n) { return BigInt(n).toString(2).split('1').length - 1; }
 
-    // Matematyka 40-bitowa (Twoja logika)
-    function processUID(uid) {
-        let clean = uid.replace(/[^0-9A-Fa-f]/g, '');
-        if (clean.length === 8) clean = "00" + clean; // Dopełnienie MIFARE 4b do 40bit
-
-        let bytes = [];
-        for (let i = 0; i < clean.length; i += 2) { bytes.push(clean.substr(i, 2)); }
-        let thHex = bytes.reverse().join('').toUpperCase().padStart(10, '0');
-
-        let thVal = BigInt("0x" + thHex);
-        let altVal = thVal ^ 1n;
-        let thAltHex = altVal.toString(16).toUpperCase().padStart(10, '0');
-
-        let fc = thVal >> 20n;
-        let id_ = (thVal >> 1n) & 0x7FFFFn;
-        let green = `${String(fc).padStart(5, '0')}-${String(id_).padStart(6, '0')}`;
-
-        return { th: thHex, thAlt: thAltHex, green: green };
-    }
-
-    function addCardToTable(data) {
-        scannedCards.push(data);
-        downloadBtn.style.display = "block";
+    function updateAll(mainThHex, fc, cid, source) {
+        mainThHex = mainThHex.toUpperCase().padStart(10, '0');
+        if (source !== 'th') document.getElementById('th').value = mainThHex;
         
-        const row = tableBody.insertRow(0); // Dodaj na górę listy
-        row.insertCell(0).innerText = scannedCards.length;
-        row.insertCell(1).innerText = data.th;
-        row.insertCell(2).innerText = data.thAlt;
-        row.insertCell(3).innerText = data.green;
+        let val = BigInt("0x" + mainThHex);
+        document.getElementById('th_alt').value = (val ^ 1n).toString(16).toUpperCase().padStart(10, '0');
+        
+        if (source !== 'green') document.getElementById('green').value = `${String(fc).padStart(5, '0')}-${String(cid).padStart(6, '0')}`;
+        
+        if (source !== 'serial') {
+            let bytes = [];
+            for (let i = 0; i < 10; i += 2) { bytes.push(mainThHex.substr(i, 2)); }
+            document.getElementById('serial').value = bytes.reverse().join(':').toUpperCase();
+        }
     }
 
-    function updateDisplay(data) {
-        document.getElementById('th').value = data.th;
-        document.getElementById('th_alt').value = data.thAlt;
-        document.getElementById('green').value = data.green;
+    function handleGreen(val) {
+        let parts = val.split('-');
+        if (parts.length === 2 && parts[0] !== "" && parts[1] !== "") {
+            let fc = BigInt(parts[0]);
+            let id_ = BigInt(parts[1]);
+            let val_39 = (fc << 19n) | id_;
+            let ones = bitCount(val_39);
+            let pb_even = (ones % 2 === 0) ? 0n : 1n;
+            let th_even = ((val_39 << 1n) | pb_even).toString(16).toUpperCase().padStart(10, '0');
+            updateAll(th_even, fc, id_, 'green');
+            document.getElementById('green').value = val;
+        }
     }
 
-    // Eksport do Excela
-    downloadBtn.addEventListener('click', () => {
-        const worksheet = XLSX.utils.json_to_sheet(scannedCards.map((c, index) => ({
-            "Lp": index + 1,
-            "TH Oryginalny": c.th,
-            "TH Alternatywny": c.thAlt,
-            "Green (FC-ID)": c.green
-        })));
-        
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Karty RFID");
-        
-        const date = new Date().toISOString().slice(0,10);
-        XLSX.writeFile(workbook, `skan_kart_${date}.xlsx`);
+    function handleTH(val) {
+        let clean = val.replace(/[^0-9A-Fa-f]/g, '');
+        if (clean.length > 0) {
+            let thVal = BigInt("0x" + clean);
+            let fc = thVal >> 20n;
+            let id_ = (thVal >> 1n) & 0x7FFFFn;
+            updateAll(clean, fc, id_, 'th');
+        }
+    }
+
+    function handleSerial(val) {
+        let clean = val.replace(/[^0-9A-Fa-f]/g, '');
+        if (clean.length >= 8) {
+            let bytes = [];
+            if (clean.length % 2 !== 0) clean = '0' + clean;
+            for (let i = 0; i < clean.length; i += 2) { bytes.push(clean.substr(i, 2)); }
+            let thHex = bytes.reverse().join('').padStart(10, '0');
+            let thVal = BigInt("0x" + thHex);
+            let fc = thVal >> 20n;
+            let id_ = (thVal >> 1n) & 0x7FFFFn;
+            updateAll(thHex, fc, id_, 'serial');
+            document.getElementById('serial').value = val.toUpperCase();
+        }
+    }
+
+    // --- TABELA I EXCEL ---
+    function saveToTable() {
+        const th = document.getElementById('th').value;
+        const thAlt = document.getElementById('th_alt').value;
+        const gr = document.getElementById('green').value;
+        if(!th || !gr) return;
+
+        scannedData.push({ th, thAlt, gr });
+        const row = document.getElementById('tableBody').insertRow(0);
+        row.insertCell(0).innerText = th;
+        row.insertCell(1).innerText = thAlt;
+        row.insertCell(2).innerText = gr;
+        document.getElementById('downloadBtn').style.display = 'block';
+    }
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+        const ws = XLSX.utils.json_to_sheet(scannedData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Karty");
+        XLSX.writeFile(wb, "skan_rfid.xlsx");
     });
 
-    function resetForm() {
-        location.reload(); // Najszybsze czyszczenie listy i stanów
-    }
+    function resetForm() { location.reload(); }
 </script>
 
 </body>
